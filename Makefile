@@ -1,9 +1,9 @@
 CXX = g++					# compiler
 
-OBJECTS0 = server_functions.o server_function_skels.o rpc.o  server.o	 	#compile test server
+OBJECTS0 = server_functions.c server_function_skels.c rpc.cc server.c	 	#compile test server
 EXEC0 = server
 
-OBJECTS1 = client.o rpc.o	#compile test client
+OBJECTS1 = client.cc rpc.cc	#compile test client
 EXEC1 = client
 
 OBJECTS2 = binder.o  #compile binder
