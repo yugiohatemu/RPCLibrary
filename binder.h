@@ -32,6 +32,9 @@ class Binder{
 
 	//keep track of servers connecting
 	//keep a list of process using
+	string serverAddress;
+	int serverPort;
+
 public:
 	Binder();
 	~Binder();

@@ -31,10 +31,53 @@ int byteToInt(char * buffer){
 	return byte;
 }
 
+char *intToChars(int integer) {
+    char *returnVal = new char[4];
+    returnVal[0] = (integer >> 24) & 0xFF;
+    returnVal[1] = (integer >> 16) & 0xFF;
+    returnVal[2] = (integer >> 8) & 0xFF;
+    returnVal[3] = integer & 0xFF;
+
+    return returnVal;
+}
+
 int main(){
-	int i = 30;
-	char * x = intToByte(30);
-	cout<<x<<endl;
-	cout<<byteToInt(x)<<endl;
+	char * s = new char[2];
+	s[0] = 'a';
+	s[1] = '2';
+//	s[2] = '\0';
+	string test(s);
+	cout<<s<<endl;
+//	char a1 = 'a';
+//	short b1 = 100;
+//	int c1 = 1000;
+//	long d1 = 10000;
+//	int count1 = 5;
+//	long return1 = 0;
+//	int argTypes1[count1 + 1];
+//	void **args1;
+//	args1 = (void **)malloc(count1 * sizeof(void *));
+//	args1[0] = (void *)&return1;
+//	cout<<(* (long *) args1[0])<<endl;
+//	args1[1] = (void *)&a1;
+//	cout<<(* (char *) args1[1])<<endl;
+//	args1[2] = (void *)&b1;
+//	cout<<(* (short *) args1[2])<<endl;
+//	args1[3] = (void *)&c1;
+//	cout<<(* (int *) args1[3])<<endl;
+//	args1[4] = (void *)&d1;
+//	cout<<(* (long *) args1[4])<<endl;
+////	for(int i = 0; i< 4; i++) cout<<(* (int *) args1[i])<<endl;
+//
+//	double d = 123.45678;
+//	void * a = &d;
+//	char * str =  (char *) malloc(4 * sizeof(char));
+//	bzero(str, 4);
+//	for(int i = 0; i< 4;i ++) str = (char *)a;
+//	void * k =str;
+//	double t = *(double *)k;
+//	printf("%.10lf \n", t);
+	//free(str);
+//	delete [] str;
 	return 0;
 }

@@ -1,7 +1,7 @@
 #include "utility.h"
 #include "rpc.h"
-#include <iostream>
-using namespace std;
+#include <unistd.h>
+#include <sstream>
 
 int byteToInt(char * buffer){
 	int byte = 0;
@@ -33,6 +33,8 @@ char * intToByte(int input){
 	return buffer;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Check if argument type is ok
 bool isArgTypeInput(int argType) {
     // Cast to an unsigned int so that right shift fills with 0's and not 1's, like left shift.
     unsigned int input = (unsigned int)argType;
@@ -79,4 +81,46 @@ int getArgCount(int * argTypes){
 
 	}
 	return count;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+string encryptStringWithSize(string s){
+	stringstream buffer;
+	buffer<<intToByte(s.length());
+	buffer<<s;
+	return buffer.str();
+}
+
+int decryptInt(int fd){
+	char size[4] = {};
+	if(read(fd,size,4)< 0){
+		return -1;
+	}
+	return byteToInt(size);
+}
+
+string decryptString(int fd){
+	int length = decryptInt(fd);
+	//	cout<<"String length"<<length<<endl;
+	if(length < 0){
+		return NULL;
+	}
+	//Add one more for end of string
+	char buffer[length+1];
+	bzero(buffer, length+1);
+	if(read(fd, buffer, length) < 0){
+		return NULL;
+	}
+	string output(buffer);
+//	cout<<output<<endl;
+	return output;
+
+}
+
+
+int decryptString(int fd, char * s){
+
+//	printf("%s",s);
+	return 0;
 }

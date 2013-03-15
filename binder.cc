@@ -99,23 +99,43 @@ int Binder::bindSelect(){
 				}else{ //receiving request
 					//Check what request if is
 
-					//Read first 4 byte determine size of buffer
-					char buffer[4] = {};
-					if(read(i,buffer,4)<0){ //error
-						cout<<"ERROR"<<endl;
+					//Read first 8  byte determine what mesage it is
+					int length = decryptInt(i);
+					int type = decryptInt(i);
+					if(length <= 0 || type < 0){
+						cout<<"Server/Client Abort connection"<<endl;
 						close(i);
 						FD_CLR(i, &master);
 						continue;
 					}
-					int size = byteToInt(buffer);
-					char * message = new char[size];
+					cout<<"Length and Size "<<length<<" "<<type<<endl;
+					if(type == REGISTER){
+						//Decrypt address and port No
+//						char * test;
 
-//					cout<<size<<endl;
-//					char type[1] = {};
-					if(read(i,message,size)<0){
-						cout<<"ERROR"<<endl;
+						serverAddress = decryptString(i);
+						serverPort = decryptInt(i);
+						if(serverPort < 0){
+							return -1;
+						}
+						cout<<"Register Server "<<serverAddress<<endl;
+						cout<<"Register port"<<serverPort<<endl;
+						//TODO: add names later
+					}else if(type == LOC_REQUEST){
+						cout<<"Accept Request"<<endl;
+						//sendBack serverInfo simplified version
+						stringstream buffer;
+						buffer<<intToByte(LOC_SUCCESS);
+						buffer<<encryptStringWithSize(serverAddress);
+						buffer<<intToByte(serverPort);
+						string output = encryptStringWithSize(buffer.str());
+						cout<<"Send Rquest Back "<<output<<endl;
+
+						if(write(i,output.c_str(), output.length()) < 0){
+								cout<<"Write Fail"<<endl;
+								return -1;
+						}
 					}
-					cout<<message<<endl;
 				}
 			}
 		} //end forloop

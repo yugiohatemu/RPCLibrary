@@ -10,6 +10,7 @@
 #include <sstream>
 #include <map>
 #include <sstream>
+#include <errno.h>
 using namespace std;
 //Library
 #include "rpc.h"
@@ -29,14 +30,17 @@ int serverFD;
 string SERVER_ADDRESS = "";
 int SERVER_PORT = 0;
 
+
 int initBinderSocket(){
 	BINDER_ADDRESS = getenv ("BINDER_ADDRESS");
 	BINDER_PORT = atoi(getenv("BINDER_PORT"));
 	binderHE = gethostbyname(BINDER_ADDRESS.c_str());
 
+	cout<<"BINDER_ADDRESS "<<BINDER_ADDRESS<<endl;
+	cout<<"BINDER_PORT "<<BINDER_PORT<<endl;
 	binderFD = socket(AF_INET, SOCK_STREAM, 0);
 	if (binderFD < 0){
-	//		error("ERROR opening socket");
+		cout<<"ERROR binder socket"<<endl;
 		return -1;
 	}
 
@@ -45,11 +49,12 @@ int initBinderSocket(){
 	memcpy(&(binderSocket.sin_addr.s_addr), binderHE->h_addr, binderHE->h_length);
 	binderSocket.sin_port = htons(BINDER_PORT);
 
-		//Connect
+	//Connect
 	if (connect(binderFD,(struct sockaddr *) &binderSocket,sizeof(binderSocket)) < 0){
-		//error("ERROR connecting");
+		cout<<"ERROR connecting"<<endl;
 		return -1;
 	}
+
 	return 0;
 }
 
@@ -57,10 +62,10 @@ int initBinderSocket(){
 
 int initServerSocket(){
 	//Set up server
-
 	serverFD = socket(AF_INET, SOCK_STREAM, 0);
 	if (serverFD < 0) {
-	//	error("ERROR opening socket");
+		cout<<"ERROR opening socket"<<endl;
+		return -1;
 	}
 
 	//Setup
@@ -71,13 +76,15 @@ int initServerSocket(){
 
 	//Bind
 	if (bind(serverFD, (struct sockaddr *) &serverSocket, sizeof(serverSocket)) < 0){
-	//			  error("ERROR on binding");
+		cout<<"ERROR on binding"<<endl;
+		return -1;
 	}
 	//Get portNo
 	socklen_t server = sizeof(serverSocket);
 
 	if (getsockname(serverFD, (struct sockaddr *) &serverSocket, &server) == -1){
-	//	    	error("ERROR on getting port # and address");
+		cout<<"ERROR on getting port # and address"<<endl;
+		return -1;
 	}else{
 		char host[256] ={};
 		gethostname(host, sizeof(host));
@@ -87,51 +94,74 @@ int initServerSocket(){
 		cout<<"SERVER_PORT "<<SERVER_PORT<<endl;
 
 	}
-
-	//Listen
-	if(listen(serverFD,5)== -1){
-		//error("ERROR on listen");
-	}
 	return 0;
 }
+
+int initOneTimeSocket(string add, int port, string message){
+	struct hostent *hp = gethostbyname(add.c_str());
+	struct sockaddr_in oneSocket;
+
+	//Create socket
+	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0){
+		cout<<"ERROR opening socket";
+		return -1;
+	}
+	//Set up server
+	oneSocket.sin_family = AF_INET;
+	memcpy(&(oneSocket.sin_addr.s_addr), hp->h_addr, hp->h_length);
+	oneSocket.sin_port = port;
+
+	//Connect
+
+	if (connect(sockfd,(struct sockaddr *) &oneSocket,sizeof(oneSocket))< 0){
+		cout<<"ERROR connecting "<<strerror(errno)<<endl;
+		return -1;
+	}
+
+	//Send message and wait for reply
+	if(write(sockfd,message.c_str(),message.length()) < 0){
+		cout<<"ERROR Write to Client"<<endl;
+		return -1;
+	}
+	//Read from server
+	int length = decryptInt(sockfd);
+	int type = decryptInt(sockfd);
+	if(length <= 0 || type < 0){
+		cout<<"Type Error"<<endl;
+		//return -1;
+	}
+
+	close(sockfd);
+	return 0;
+}
+
 
 int sendRegsterMessage(char * name, int * argTypes){
 	stringstream buffer;
-	buffer<<REGSTER;
-	//server address and port #
-	buffer<<intToByte(SERVER_ADDRESS.length());
-	buffer<<SERVER_ADDRESS;
+	buffer<<intToByte(REGISTER);
+	buffer<<encryptStringWithSize(SERVER_ADDRESS);
 	buffer<<intToByte(SERVER_PORT);
-	//name
-	string sName(name);
-	buffer<<intToByte(sName.length());
-	buffer<<sName;
-	//argType
-	buffer<<intToByte(getArgCount(argTypes));
-	buffer<<argTypes;
-	//+1?? append the length at the start
-	string message = buffer.str();
-
-	stringstream endBuffer;
-	endBuffer<<intToByte(message.length());
-	endBuffer<<message;
-//	cout<<endBuffer.str()<<endl;
-	string output = endBuffer.str();
+	string output = encryptStringWithSize(buffer.str());
 	cout<<output<<endl;
-
 	if(write(binderFD,output.c_str(), output.length()) < 0){
 		return -1;
 	}
+	//serverAddress length,   server address, port # in byte
+	//Do not care about binder reply for now
+
 	return 0;
 }
-//////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // called by server
 int rpcInit() {
 	cout<<"Init server"<<endl;
 	int bindError = initBinderSocket();
+	cout<<"Bind binder sucess"<<endl;
 	int serverError = initServerSocket();
 	if(bindError< 0 || serverError < 0){
+		cout<<"Init server Fail"<<endl;
 		return -1;
 	}
 	cout<<"Init server sucess"<<endl;
@@ -150,52 +180,61 @@ int rpcRegister(char* name, int* argTypes, skeleton f) {
 		return -1;
 	}
 	cout<<"Register Sucess"<<endl;
-
-	//add it to skeleton map
-	//skeletonMap
-	//Parse the name and argTypes as a string for idenfication
-	//and store the skeleton
+	string sName(name);
+	skeletonMap[sName] = f;
 
 	return 0;
 }
 
-//send
-//	int sendLen = input.length() + 1; //+1 for null character
-//
-//	stringstream outputStream;
-//	outputStream<<input;
-//	const char * output = (outputStream.str()).c_str();
-//
-//
-//	int n = write(sockfd,output,strlen(output));
-//	if (n < 0) {
-////		error("ERROR writing to socket");
-//		return -1;
-//	}
-//
-//	//Precompute the size of request , "SERVER: "+len
-//	int reciveLen = sendLen + 8;
-//	char buffer[reciveLen];
-//	bzero(buffer,reciveLen);
-//
-//	n = read(sockfd,buffer,reciveLen);
-//	if (n < 0) {
-////		error("ERROR reading from socket");
-//		return -1;
-//	}
-//	printf("%s\n",buffer);
-//
-//	close(sockfd);
 
 
 int rpcCall(char* name, int* argTypes, void** args) {
-	//check if argType is valid
+	//check if argType is valid and ask for binder
 	if(checkArgType(argTypes) < 0) return -1; //parse argument error
-	//Ask if it is in the map
-	//call the binder to check if there is function
-	//if has, the binder will find the server and ask the server to do things, which is in rpcExcute
+	if(initBinderSocket() < 0) return -1;
+
+	stringstream ss;
+	ss<<intToByte(4)<<intToByte(LOC_REQUEST);
+	string output = ss.str();
+
+	//8 byte
+	if(write(binderFD, output.c_str(),output.length())< 0 ){
+		cout<<"Error Requesting function"<<endl;
+		return -1;
+	}
+//
+//	//Always the first 8 byte
+	int length = decryptInt(binderFD);
+	int type = decryptInt(binderFD);
+	if(length <= 0 || type < 0){
+		cout<<"Type Error"<<endl;
+		return -1;
+	}
+//	//get server address and portNo
+	if(type == LOC_SUCCESS){
+		int sPort = 0;
+		string sAdd= decryptString(binderFD);
+		sPort = decryptInt(binderFD);
+		if( sPort < 0){
+			return -1;
+		}
+		cout<<"Server "<<sAdd<<" "<<sPort<<endl;
+		stringstream xx;
+		xx<<intToByte(4)<<intToByte(EXCUTE);
+		string test = xx.str();
+		if(initOneTimeSocket(sAdd,sPort, test)< 0 ){
+			cout<<"Error to server"<<endl;
+			return -1;
+		}
+	}
+	//make a server socket
+
+	//send server request
 
 
+	//wait for server
+
+	close(binderFD);
 	return 0;
 }
 
@@ -203,7 +242,72 @@ int rpcCall(char* name, int* argTypes, void** args) {
  ** Handle the actual excution of skeletion
  */
 int rpcExecute() {
-	//rpcExecute
+	cout<<"Server Excute Start"<<endl;
+	if(listen(serverFD,5)< 0){
+			cout<<"ERROR on listen"<<endl;
+			return -1;
+	}
+	fd_set master,read_fds;
+	int fdmax,newsockfd;
+	struct sockaddr_in sendSocket;
+	//Listen
+
+	FD_SET(serverFD, &master);
+	fdmax = serverFD;
+	cout<<"Server Listening"<<endl;
+	//TODO: reuse address?
+	int i;
+	while(true){
+
+		read_fds = master;
+		if(select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1){
+			cout<<"ERROR on select";
+		}
+
+		for(i = 0; i <=fdmax;i++){
+			if(FD_ISSET(i, &read_fds)){
+				if(i == serverFD){
+					socklen_t clilen = sizeof(sendSocket);
+					newsockfd = accept(serverFD, (struct sockaddr *) &sendSocket, &clilen);
+					if (newsockfd < 0) {
+				  				cout<<"ERROR on accept";
+					}else{
+						FD_SET(newsockfd, &master); //add to server set
+						if(newsockfd > fdmax){ // keep track of the maximum
+							fdmax = newsockfd;
+						}
+					}
+				}else{ //Handle request
+					//Read first 4 byte determine size of buffer
+					int length = decryptInt(i);
+					int type = decryptInt(i);
+					if(length <= 0 || type < 0){
+						cout<<"Client Abort connection"<<endl;
+						close(i);
+						FD_CLR(i, &master);
+						continue;
+					}
+					if(type == EXCUTE){
+						//Try excute
+						cout<<"Get client request"<<endl;
+						stringstream buffer;
+						buffer<<intToByte(EXECUTE_SUCCESS);
+						string output = encryptStringWithSize(buffer.str());
+						cout<<"Send Sucess Back "<<output<<endl;
+						if(write(i,output.c_str(), output.length()) < 0){
+							cout<<"Write Fail"<<endl;
+							return -1;
+						}
+						//Send a sucess message back
+					}//else error
+
+				}
+			}
+		} //end forloop
+	}//end while loop
+
+
+	close(serverFD);
 	return 0;
 }
 
