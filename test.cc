@@ -1,53 +1,16 @@
+
 #include <iostream>
-#include <sstream>
+#include <errno.h>
+#include "utility.h"
 using namespace std;
 
-char * intToByte(int n){
-	char * buffer = new char[4];
-	for(int i = 3;i >=0; i-=1 ){
-		int b =  n% 16;
-		if(b < 10){
-			buffer[i] = char('0'+b);
-		}else{
-			buffer[i]  = char('A'+b-10);
-		}
-		n = n/16;
-		cout<<buffer[i];
-	}
-	return buffer;
-}
 
-
-int byteToInt(char * buffer){
-	int byte = 0;
-	for(int i = 0; i< 4;i+=1){
-		byte *= 16;
-		if(buffer[i]>='0' && buffer[i]<='9'){
-			byte+= (int)(buffer[i]-'0');
-		}else{
-			byte+= (int)(buffer[i]-'A'+10);
-		}
-	}
-	return byte;
-}
-
-char *intToChars(int integer) {
-    char *returnVal = new char[4];
-    returnVal[0] = (integer >> 24) & 0xFF;
-    returnVal[1] = (integer >> 16) & 0xFF;
-    returnVal[2] = (integer >> 8) & 0xFF;
-    returnVal[3] = integer & 0xFF;
-
-    return returnVal;
-}
 
 int main(){
-	char * s = new char[2];
-	s[0] = 'a';
-	s[1] = '2';
-//	s[2] = '\0';
-	string test(s);
-	cout<<s<<endl;
+
+
+	return 0;
+}
 //	char a1 = 'a';
 //	short b1 = 100;
 //	int c1 = 1000;
@@ -79,5 +42,3 @@ int main(){
 //	printf("%.10lf \n", t);
 	//free(str);
 //	delete [] str;
-	return 0;
-}

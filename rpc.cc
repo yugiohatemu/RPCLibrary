@@ -97,8 +97,8 @@ int initServerSocket(){
 	return 0;
 }
 
-int initOneTimeSocket(string add, int port, string message){
-	struct hostent *hp = gethostbyname(add.c_str());
+int initOneTimeSocket(string address, int port, string message){
+	struct hostent *hp = gethostbyname(address.c_str());
 	struct sockaddr_in oneSocket;
 
 	//Create socket
@@ -108,14 +108,14 @@ int initOneTimeSocket(string add, int port, string message){
 		return -1;
 	}
 	//Set up server
+	bzero((char *) &oneSocket, sizeof(oneSocket));
 	oneSocket.sin_family = AF_INET;
 	memcpy(&(oneSocket.sin_addr.s_addr), hp->h_addr, hp->h_length);
-	oneSocket.sin_port = port;
+	oneSocket.sin_port = htons(port);
 
 	//Connect
-
 	if (connect(sockfd,(struct sockaddr *) &oneSocket,sizeof(oneSocket))< 0){
-		cout<<"ERROR connecting "<<strerror(errno)<<endl;
+		cout<<"ERROR "<<strerror(errno)<<endl;
 		return -1;
 	}
 
@@ -131,19 +131,22 @@ int initOneTimeSocket(string add, int port, string message){
 		cout<<"Type Error"<<endl;
 		//return -1;
 	}
-
+	if(type == EXECUTE_SUCCESS){
+		cout<<"Client Excute Sucee"<<endl;
+	}
 	close(sockfd);
 	return 0;
 }
 
-
-int sendRegsterMessage(char * name, int * argTypes){
+int sendRegisterMessage(char * name, int * argTypes){
 	stringstream buffer;
+	//length register ip port namd , undone argType
 	buffer<<intToByte(REGISTER);
 	buffer<<encryptStringWithSize(SERVER_ADDRESS);
 	buffer<<intToByte(SERVER_PORT);
+	buffer<<encryptStringWithSize(name);
 	string output = encryptStringWithSize(buffer.str());
-	cout<<output<<endl;
+//	cout<<output<<endl;
 	if(write(binderFD,output.c_str(), output.length()) < 0){
 		return -1;
 	}
@@ -175,11 +178,11 @@ int rpcRegister(char* name, int* argTypes, skeleton f) {
 	//Check if argType is valid
 	if(checkArgType(argTypes) < 0) return -1;
 	//Send message to binder
-	if(sendRegsterMessage(name, argTypes)<0){
-		cout<<"Register Fail"<<endl;
+	if(sendRegisterMessage(name, argTypes)<0){
+
 		return -1;
 	}
-	cout<<"Register Sucess"<<endl;
+
 	string sName(name);
 	skeletonMap[sName] = f;
 
@@ -193,17 +196,18 @@ int rpcCall(char* name, int* argTypes, void** args) {
 	if(checkArgType(argTypes) < 0) return -1; //parse argument error
 	if(initBinderSocket() < 0) return -1;
 
-	stringstream ss;
-	ss<<intToByte(4)<<intToByte(LOC_REQUEST);
-	string output = ss.str();
+	stringstream buffer;
+	buffer<<intToByte(4)<<intToByte(LOC_REQUEST);
+	buffer<<encryptStringWithSize(name);
+	string output = buffer.str();
 
 	//8 byte
 	if(write(binderFD, output.c_str(),output.length())< 0 ){
 		cout<<"Error Requesting function"<<endl;
 		return -1;
 	}
-//
-//	//Always the first 8 byte
+
+	//Always the first 8 byte
 	int length = decryptInt(binderFD);
 	int type = decryptInt(binderFD);
 	if(length <= 0 || type < 0){
@@ -219,20 +223,19 @@ int rpcCall(char* name, int* argTypes, void** args) {
 			return -1;
 		}
 		cout<<"Server "<<sAdd<<" "<<sPort<<endl;
-		stringstream xx;
-		xx<<intToByte(4)<<intToByte(EXCUTE);
-		string test = xx.str();
+		stringstream ss;
+		//EXECUTE NAME ARGTYPES ARGS
+		ss<<intToByte(4)<<intToByte(EXCUTE);
+		ss<<encryptStringWithSize(name);
+		string test = ss.str();
 		if(initOneTimeSocket(sAdd,sPort, test)< 0 ){
 			cout<<"Error to server"<<endl;
-			return -1;
+//			return -1;
 		}
+	}else if(type == LOC_FAILURE){
+		cout<<"Fail to Excute"<<name<<endl;
 	}
-	//make a server socket
 
-	//send server request
-
-
-	//wait for server
 
 	close(binderFD);
 	return 0;
@@ -242,7 +245,7 @@ int rpcCall(char* name, int* argTypes, void** args) {
  ** Handle the actual excution of skeletion
  */
 int rpcExecute() {
-	cout<<"Server Excute Start"<<endl;
+
 	if(listen(serverFD,5)< 0){
 			cout<<"ERROR on listen"<<endl;
 			return -1;
@@ -254,8 +257,7 @@ int rpcExecute() {
 
 	FD_SET(serverFD, &master);
 	fdmax = serverFD;
-	cout<<"Server Listening"<<endl;
-	//TODO: reuse address?
+	cout<<"Server Excute Start"<<endl;
 	int i;
 	while(true){
 
@@ -270,7 +272,7 @@ int rpcExecute() {
 					socklen_t clilen = sizeof(sendSocket);
 					newsockfd = accept(serverFD, (struct sockaddr *) &sendSocket, &clilen);
 					if (newsockfd < 0) {
-				  				cout<<"ERROR on accept";
+				  		cout<<"ERROR on accept";
 					}else{
 						FD_SET(newsockfd, &master); //add to server set
 						if(newsockfd > fdmax){ // keep track of the maximum
@@ -287,20 +289,44 @@ int rpcExecute() {
 						FD_CLR(i, &master);
 						continue;
 					}
-					if(type == EXCUTE){
+					if(type == REGISTER_SUCCESS){
+						cout<<"Register sucess"<<endl;
+					}else if(type == EXCUTE){
 						//Try excute
 						cout<<"Get client request"<<endl;
-						stringstream buffer;
-						buffer<<intToByte(EXECUTE_SUCCESS);
-						string output = encryptStringWithSize(buffer.str());
-						cout<<"Send Sucess Back "<<output<<endl;
-						if(write(i,output.c_str(), output.length()) < 0){
-							cout<<"Write Fail"<<endl;
-							return -1;
+						string funcName = decryptString(i);
+						if(skeletonMap.find(funcName) != skeletonMap.end()){
+							stringstream buffer;
+							buffer<<intToByte(EXECUTE_SUCCESS);
+							string output = encryptStringWithSize(buffer.str());
+							cout<<"Send Sucess Back "<<output<<endl;
+							if(write(i,output.c_str(), output.length()) < 0){
+								cout<<"Write Fail"<<endl;
+								continue;
+							}
+						}else{
+							stringstream buffer;
+							buffer<<intToByte(EXECUTE_FAILURE);
+							int reasonCode = 15;
+							buffer<<intToByte(reasonCode);
+							string output = encryptStringWithSize(buffer.str());
+							 //Use a random code for now
+							cout<<"Send Failure Back "<<output<<endl;
+							if(write(i,output.c_str(), output.length()) < 0){
+								cout<<"Write Fail"<<endl;
+								continue;
+							}
 						}
+
+
 						//Send a sucess message back
 					}//else error
-
+					else if(type == TERMINATE){
+						cout<<"Client Terminate Connection"<<endl;
+						close(i);
+						FD_CLR(i, &master);
+						continue;
+					}
 				}
 			}
 		} //end forloop
@@ -312,6 +338,14 @@ int rpcExecute() {
 }
 
 int rpcTerminate() {
+	stringstream buffer;
+	buffer<<intToByte(TERMINATE);
+	string output = encryptStringWithSize(buffer.str());
+	if(write(binderFD, output.c_str(),output.length())< 0 ){
+		cout<<"Error Requesting Terminate"<<endl;
+		return -1;
+	}
+	cout<<"Client Terminate"<<endl;
 	return 0;
 }
 

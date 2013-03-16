@@ -10,6 +10,7 @@
 #include "rpc.h"
 #include <map>
 #include <string>
+#include <set>
 using namespace std;
 
 //Need portNo, address to idenfify one server
@@ -34,7 +35,7 @@ class Binder{
 	//keep a list of process using
 	string serverAddress;
 	int serverPort;
-
+	set<string> nameSet;
 public:
 	Binder();
 	~Binder();

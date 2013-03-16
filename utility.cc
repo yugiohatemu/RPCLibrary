@@ -92,6 +92,13 @@ string encryptStringWithSize(string s){
 	return buffer.str();
 }
 
+string encryptStringWithSize(char * s){
+	stringstream buffer;
+	string ss(s);
+	buffer<<intToByte(ss.length());
+	buffer<<ss;
+	return buffer.str();
+}
 int decryptInt(int fd){
 	char size[4] = {};
 	if(read(fd,size,4)< 0){

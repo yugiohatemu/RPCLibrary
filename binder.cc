@@ -108,33 +108,62 @@ int Binder::bindSelect(){
 						FD_CLR(i, &master);
 						continue;
 					}
-					cout<<"Length and Size "<<length<<" "<<type<<endl;
+//					cout<<"Length and Size "<<length<<" "<<type<<endl;
 					if(type == REGISTER){
-						//Decrypt address and port No
-//						char * test;
 
 						serverAddress = decryptString(i);
 						serverPort = decryptInt(i);
 						if(serverPort < 0){
-							return -1;
+							continue;
 						}
 						cout<<"Register Server "<<serverAddress<<endl;
 						cout<<"Register port"<<serverPort<<endl;
-						//TODO: add names later
+						//Name
+						string funcName = decryptString(i);
+						nameSet.insert(funcName);
+
+						//Check if register sucess
+						stringstream buffer;
+						buffer<<intToByte(REGISTER_SUCCESS);
+						string output = encryptStringWithSize(buffer.str());
+						if(write(i,output.c_str(), output.length()) < 0){
+							cout<<"Write Fail"<<endl;
+							continue;
+						}
+
 					}else if(type == LOC_REQUEST){
 						cout<<"Accept Request"<<endl;
 						//sendBack serverInfo simplified version
-						stringstream buffer;
-						buffer<<intToByte(LOC_SUCCESS);
-						buffer<<encryptStringWithSize(serverAddress);
-						buffer<<intToByte(serverPort);
-						string output = encryptStringWithSize(buffer.str());
-						cout<<"Send Rquest Back "<<output<<endl;
+						string funcName = decryptString(i);
+						//TODO: do other error checking later
+						if(nameSet.find(funcName) == nameSet.end()){
+							cout<<"Request"<<funcName<<" does not exist"<<endl;
+							//Send error request
+							stringstream buffer;
+							buffer<<intToByte(LOC_FAILURE);
+							string output = encryptStringWithSize(buffer.str());
 
-						if(write(i,output.c_str(), output.length()) < 0){
+							if(write(i,output.c_str(), output.length()) < 0){
 								cout<<"Write Fail"<<endl;
-								return -1;
+								continue;
+							}
+						}else{
+
+							stringstream buffer;
+							buffer<<intToByte(LOC_SUCCESS);
+							buffer<<encryptStringWithSize(serverAddress);
+							buffer<<intToByte(serverPort);
+							string output = encryptStringWithSize(buffer.str());
+//							cout<<"Send Rquest Back "<<output<<endl;
+
+							if(write(i,output.c_str(), output.length()) < 0){
+								cout<<"Write Fail"<<endl;
+								continue;
+							}
 						}
+					}else if(type == TERMINATE){
+						cout<<"Client Requst Terminate"<<endl;
+						//TODO: send message to all server
 					}
 				}
 			}

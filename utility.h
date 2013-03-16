@@ -11,10 +11,10 @@ using namespace std;
 #define REGISTER_FAILURE 2
 #define LOC_REQUEST 3
 #define LOC_SUCCESS 4
-#define LOC_FAILUTER 5
+#define LOC_FAILURE 5
 #define EXCUTE 6
 #define EXECUTE_SUCCESS 7
-#define EXECUTE_FAILUTER 8
+#define EXECUTE_FAILURE 8
 #define TERMINATE 9
 
 #define PARSE_ERROR -6
@@ -33,3 +33,4 @@ string encryptStringWithSize(string s);
 int decryptInt(int fd);
 int decryptString(int fd, char * s);
 string decryptString(int fd);
+string encryptStringWithSize(char * s);
