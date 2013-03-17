@@ -30,7 +30,14 @@ int getArgCount(int * argTypes);
 
 //Encrypt and decrypt string
 string encryptStringWithSize(string s);
+string encryptArgTypeWithSize(int * argTypes);
+string encryptStringWithSize(char * s);
+string encryptArgsWithSize(int * argTypes, void **args );
+string encryptArgWithSize(int argType, void * args);
+//string encryptArgTypeWithSize(int * argTypes , int outPos);
+
 int decryptInt(int fd);
 int decryptString(int fd, char * s);
 string decryptString(int fd);
-string encryptStringWithSize(char * s);
+int * decryptArgType(int fd);
+void ** decryptArgsWithType(int * argType, int fd);

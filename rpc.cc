@@ -97,64 +97,28 @@ int initServerSocket(){
 	return 0;
 }
 
-int initOneTimeSocket(string address, int port, string message){
-	struct hostent *hp = gethostbyname(address.c_str());
-	struct sockaddr_in oneSocket;
 
-	//Create socket
-	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0){
-		cout<<"ERROR opening socket";
-		return -1;
-	}
-	//Set up server
-	bzero((char *) &oneSocket, sizeof(oneSocket));
-	oneSocket.sin_family = AF_INET;
-	memcpy(&(oneSocket.sin_addr.s_addr), hp->h_addr, hp->h_length);
-	oneSocket.sin_port = htons(port);
+int sendLocRequest(char* name, int* argTypes){
+	int outPos = checkArgType(argTypes);
+	if(outPos < 0) return -1; //parse argument error
+	if(initBinderSocket() < 0) return -1;
 
-	//Connect
-	if (connect(sockfd,(struct sockaddr *) &oneSocket,sizeof(oneSocket))< 0){
-		cout<<"ERROR "<<strerror(errno)<<endl;
-		return -1;
-	}
-
-	//Send message and wait for reply
-	if(write(sockfd,message.c_str(),message.length()) < 0){
-		cout<<"ERROR Write to Client"<<endl;
-		return -1;
-	}
-	//Read from server
-	int length = decryptInt(sockfd);
-	int type = decryptInt(sockfd);
-	if(length <= 0 || type < 0){
-		cout<<"Type Error"<<endl;
-		//return -1;
-	}
-	if(type == EXECUTE_SUCCESS){
-		cout<<"Client Excute Sucee"<<endl;
-	}
-	close(sockfd);
-	return 0;
-}
-
-int sendRegisterMessage(char * name, int * argTypes){
+		//LOC, name, argType
 	stringstream buffer;
-	//length register ip port namd , undone argType
-	buffer<<intToByte(REGISTER);
-	buffer<<encryptStringWithSize(SERVER_ADDRESS);
-	buffer<<intToByte(SERVER_PORT);
+	buffer<<intToByte(LOC_REQUEST);
 	buffer<<encryptStringWithSize(name);
+	buffer<<encryptArgTypeWithSize(argTypes);
 	string output = encryptStringWithSize(buffer.str());
-//	cout<<output<<endl;
-	if(write(binderFD,output.c_str(), output.length()) < 0){
+
+	if(write(binderFD, output.c_str(),output.length())< 0 ){
+		cout<<"Error Requesting function"<<endl;
 		return -1;
 	}
-	//serverAddress length,   server address, port # in byte
-	//Do not care about binder reply for now
-
 	return 0;
 }
+
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // called by server
@@ -173,38 +137,46 @@ int rpcInit() {
 
 
 
-
 int rpcRegister(char* name, int* argTypes, skeleton f) {
-	//Check if argType is valid
-	if(checkArgType(argTypes) < 0) return -1;
-	//Send message to binder
-	if(sendRegisterMessage(name, argTypes)<0){
+	//check argType
+	int outPos = checkArgType(argTypes);
+	if(outPos < 0) return -1;
 
+	//length register ip port namd , undone argType
+	stringstream buffer;
+	buffer<<intToByte(REGISTER);
+	buffer<<encryptStringWithSize(SERVER_ADDRESS);
+	buffer<<intToByte(SERVER_PORT);
+	buffer<<encryptStringWithSize(name);
+	buffer<<encryptArgTypeWithSize(argTypes);
+	string output = encryptStringWithSize(buffer.str());
+
+	//Write to binder
+	if(write(binderFD,output.c_str(), output.length()) < 0){
 		return -1;
 	}
 
+	//Store the skeleton
 	string sName(name);
 	skeletonMap[sName] = f;
-
+	int length = decryptInt(binderFD);
+	int type = decryptInt(binderFD);
+	if(type == REGISTER_SUCCESS){
+		cout<<"Register sucess"<<endl;
+	}else{
+		return -1;
+	}
 	return 0;
 }
 
 
 
+
+
 int rpcCall(char* name, int* argTypes, void** args) {
 	//check if argType is valid and ask for binder
-	if(checkArgType(argTypes) < 0) return -1; //parse argument error
-	if(initBinderSocket() < 0) return -1;
-
-	stringstream buffer;
-	buffer<<intToByte(4)<<intToByte(LOC_REQUEST);
-	buffer<<encryptStringWithSize(name);
-	string output = buffer.str();
-
-	//8 byte
-	if(write(binderFD, output.c_str(),output.length())< 0 ){
-		cout<<"Error Requesting function"<<endl;
-		return -1;
+	if(sendLocRequest(name,argTypes) < 0){
+		return errno;
 	}
 
 	//Always the first 8 byte
@@ -212,26 +184,72 @@ int rpcCall(char* name, int* argTypes, void** args) {
 	int type = decryptInt(binderFD);
 	if(length <= 0 || type < 0){
 		cout<<"Type Error"<<endl;
-		return -1;
+		return errno;
 	}
 //	//get server address and portNo
 	if(type == LOC_SUCCESS){
-		int sPort = 0;
-		string sAdd= decryptString(binderFD);
-		sPort = decryptInt(binderFD);
+		string sAddress= decryptString(binderFD);
+		int sPort = decryptInt(binderFD);
+
 		if( sPort < 0){
 			return -1;
 		}
-		cout<<"Server "<<sAdd<<" "<<sPort<<endl;
-		stringstream ss;
+		if(checkArgType(argTypes)< 0) cout<<"ArgType ERROR"<<endl;
+		cout<<"Server "<<sAddress<<" "<<sPort<<endl;
 		//EXECUTE NAME ARGTYPES ARGS
-		ss<<intToByte(4)<<intToByte(EXCUTE);
-		ss<<encryptStringWithSize(name);
-		string test = ss.str();
-		if(initOneTimeSocket(sAdd,sPort, test)< 0 ){
-			cout<<"Error to server"<<endl;
+		stringstream buffer;
+		buffer<<intToByte(EXCUTE);
+		buffer<<encryptStringWithSize(name);
+		buffer<<encryptArgTypeWithSize(argTypes);
+		cout<<encryptArgTypeWithSize(argTypes)<<endl;
+		buffer<<encryptArgsWithSize(argTypes,args);
+		cout<<encryptArgsWithSize(argTypes,args)<<endl;
+		string output = encryptStringWithSize(buffer.str());
+
+		struct hostent *hp = gethostbyname(sAddress.c_str());
+		struct sockaddr_in oneSocket;
+
+		//Create socket
+		int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+		if (sockfd < 0){
+			cout<<"ERROR opening socket";
+			return -1;
+		}
+		//Set up server
+		bzero((char *) &oneSocket, sizeof(oneSocket));
+		oneSocket.sin_family = AF_INET;
+		memcpy(&(oneSocket.sin_addr.s_addr), hp->h_addr, hp->h_length);
+		oneSocket.sin_port = htons(sPort);
+
+		//Connect
+		if (connect(sockfd,(struct sockaddr *) &oneSocket,sizeof(oneSocket))< 0){
+			cout<<"ERROR "<<strerror(errno)<<endl;
+			return -1;
+		}
+
+		//Send message and wait for reply
+		if(write(sockfd,output.c_str(),output.length()) < 0){
+			cout<<"ERROR Write to Client"<<endl;
 //			return -1;
 		}
+
+		cout<<"Send args to Server"<<endl;
+		//Get back the result
+		//Read from server
+		int length = decryptInt(sockfd);
+		int type = decryptInt(sockfd);
+		if(length <= 0 || type < 0){
+				cout<<"Type Error"<<endl;
+				//return -1;
+		}
+		if(type == EXECUTE_SUCCESS){
+			cout<<"Client Excute Sucee"<<endl;
+			string funcName = decryptString(sockfd);
+			argTypes = decryptArgType(sockfd);
+			args = decryptArgsWithType(argTypes, sockfd);
+
+		}
+		close(sockfd);
 	}else if(type == LOC_FAILURE){
 		cout<<"Fail to Excute"<<name<<endl;
 	}
@@ -257,7 +275,7 @@ int rpcExecute() {
 
 	FD_SET(serverFD, &master);
 	fdmax = serverFD;
-	cout<<"Server Excute Start"<<endl;
+	cout<<"Server Running"<<endl;
 	int i;
 	while(true){
 
@@ -283,23 +301,40 @@ int rpcExecute() {
 					//Read first 4 byte determine size of buffer
 					int length = decryptInt(i);
 					int type = decryptInt(i);
+//					cout<<"Type --- "<<type<<endl;
 					if(length <= 0 || type < 0){
 						cout<<"Client Abort connection"<<endl;
 						close(i);
 						FD_CLR(i, &master);
 						continue;
 					}
-					if(type == REGISTER_SUCCESS){
-						cout<<"Register sucess"<<endl;
-					}else if(type == EXCUTE){
+					if(type == EXCUTE){
 						//Try excute
 						cout<<"Get client request"<<endl;
 						string funcName = decryptString(i);
 						if(skeletonMap.find(funcName) != skeletonMap.end()){
+							cout<<"Server Excute "<<funcName<<endl;
+							//Decrypt the string back to argument
+							int * argTypes = decryptArgType(i);
+//							cout<<"Arg Type Pass"<<endl;
+							void ** args = decryptArgsWithType(argTypes, i);
+							skeleton f = skeletonMap[funcName];
+							if(f(argTypes, args) < 0){
+								cout<<"ERROR Excuting Skeleton"<<endl;
+							}
+
+							//Encrypt the message
+							//SUCCESS, name, ArgTypes, Args
 							stringstream buffer;
 							buffer<<intToByte(EXECUTE_SUCCESS);
+							buffer<<encryptStringWithSize(funcName);
+							buffer<<encryptArgTypeWithSize(argTypes);
+							buffer<<encryptArgsWithSize(argTypes, args);
 							string output = encryptStringWithSize(buffer.str());
+							//Encrypt argTypes and args (why do we care about argTypes? because we need that to get output pos?
+
 							cout<<"Send Sucess Back "<<output<<endl;
+
 							if(write(i,output.c_str(), output.length()) < 0){
 								cout<<"Write Fail"<<endl;
 								continue;
@@ -317,8 +352,6 @@ int rpcExecute() {
 								continue;
 							}
 						}
-
-
 						//Send a sucess message back
 					}//else error
 					else if(type == TERMINATE){

@@ -35,12 +35,15 @@ class Binder{
 	//keep a list of process using
 	string serverAddress;
 	int serverPort;
-	set<string> nameSet;
+	map<string,string> nameSet; //func name and argTypes??
+	int sendLocFail(int reasonCode, int fd);
+	int sendLocSuccess(string address, int port, int fd);
 public:
 	Binder();
 	~Binder();
 	int bindSelf();
 	int bindSelect();
+
 	//Keep a mapping for process
 	//The binder exists when the process exists
 };

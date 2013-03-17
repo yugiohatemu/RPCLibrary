@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <netdb.h>
+#include <errno.h>
 #include "utility.h"
 using namespace std;
 
@@ -120,7 +121,10 @@ int Binder::bindSelect(){
 						cout<<"Register port"<<serverPort<<endl;
 						//Name
 						string funcName = decryptString(i);
-						nameSet.insert(funcName);
+//						int outPos = decryptInt(i);
+						string argType = decryptString(i);
+						nameSet[funcName] = argType;
+						//nameSet.insert(funcName);
 
 						//Check if register sucess
 						stringstream buffer;
@@ -132,33 +136,20 @@ int Binder::bindSelect(){
 						}
 
 					}else if(type == LOC_REQUEST){
-						cout<<"Accept Request"<<endl;
 						//sendBack serverInfo simplified version
 						string funcName = decryptString(i);
+						cout<<"Ask Func Name"<<funcName<<endl;
 						//TODO: do other error checking later
 						if(nameSet.find(funcName) == nameSet.end()){
-							cout<<"Request"<<funcName<<" does not exist"<<endl;
-							//Send error request
-							stringstream buffer;
-							buffer<<intToByte(LOC_FAILURE);
-							string output = encryptStringWithSize(buffer.str());
-
-							if(write(i,output.c_str(), output.length()) < 0){
-								cout<<"Write Fail"<<endl;
-								continue;
+							if(sendLocFail(15, i) < 0){
+								continue ;
 							}
 						}else{
-
-							stringstream buffer;
-							buffer<<intToByte(LOC_SUCCESS);
-							buffer<<encryptStringWithSize(serverAddress);
-							buffer<<intToByte(serverPort);
-							string output = encryptStringWithSize(buffer.str());
-//							cout<<"Send Rquest Back "<<output<<endl;
-
-							if(write(i,output.c_str(), output.length()) < 0){
-								cout<<"Write Fail"<<endl;
-								continue;
+							string argType = decryptString(i);
+							cout<<funcName<<" Found"<<endl;
+							//TODO: check Type overload later....
+							if(sendLocSuccess(serverAddress,serverPort,i) < 0){
+									continue ;
 							}
 						}
 					}else if(type == TERMINATE){
@@ -171,6 +162,33 @@ int Binder::bindSelect(){
 	}//end while loop
 	return 0;
 }
+
+int Binder::sendLocFail(int reasonCode, int fd){
+	stringstream buffer;
+	buffer<<intToByte(LOC_FAILURE)<<intToByte(reasonCode);
+	string output = encryptStringWithSize(buffer.str());
+
+	if(write(fd,output.c_str(), output.length()) < 0){
+		cout<<"Write Fail"<<endl;
+		return errno;
+	}
+	return 0;
+}
+
+int Binder::sendLocSuccess(string address, int port, int fd){
+	stringstream buffer;
+	buffer<<intToByte(LOC_SUCCESS);
+	buffer<<encryptStringWithSize(address);
+	buffer<<intToByte(port);
+	string output = encryptStringWithSize(buffer.str());
+
+	if(write(fd,output.c_str(), output.length()) < 0){
+		cout<<"Write Fail"<<endl;
+		return errno;
+	}
+	return 0;
+}
+
 
 Binder::~Binder(){
 	close(binder);

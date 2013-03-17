@@ -62,24 +62,25 @@ unsigned int getArgLength(int argType) {
 int checkArgType(int *argTypes) {
     int i = 0;
     int argType = 0;
-
+//    int outPos = 0;
     for(int i = 0; argTypes[i] != 0; i++){
     	int argType = getArgType(argTypes[i]);
     	bool isValid = isArgTypeInput(argTypes[i]) || isArgTypeOutput(argTypes[i]);
     	if(argType < ARG_CHAR || argType > ARG_FLOAT || !isValid){
     		return -1 ; //
     	}else{
+//    		if(isArgTypeOutput(argTypes[i])) outPos = i;
     		argTypes[i] = argType;
     	}
     }
+    //swap(argTypes[0], argTypes[outPos]);
     return 0;
 }
 
+
 int getArgCount(int * argTypes){
 	int count = 0;
-	for(; argTypes[count] != 0; count++){
-
-	}
+	while(argTypes[count] != 0) count += 1;
 	return count;
 }
 
@@ -99,6 +100,72 @@ string encryptStringWithSize(char * s){
 	buffer<<ss;
 	return buffer.str();
 }
+
+string encryptArgTypeWithSize(int * argTypes ){
+	int count = getArgCount(argTypes);
+	stringstream buffer;
+	//buffer<<intToByte(count);
+	for(int i = 0; i< count; i++){
+		buffer<<argTypes[i];
+	}
+	return encryptStringWithSize(buffer.str());
+}
+
+//OutPos, # of Arg, ArgTypes to String
+string encryptArgTypeWithSize(int * argTypes , int outPos){
+	int count = getArgCount(argTypes);
+	stringstream buffer;
+	buffer<<intToByte(outPos);
+	buffer<<intToByte(count);
+	for(int i = 0; i< count; i++){
+			buffer<<argTypes[i];
+	}
+	return buffer.str();
+}
+
+string encryptArgWithSize(int argType, void * args){
+	stringstream buffer;
+
+	switch(argType){
+		case ARG_CHAR:
+			buffer<<(*(char *)args);
+			break;
+		case ARG_SHORT:
+			buffer<<(*(short *)args);
+			break;
+		case ARG_INT:
+			buffer<<(*(int *)args);
+			break;
+		case ARG_LONG:
+			buffer<<(*(long *)args);
+			break;
+		case ARG_DOUBLE:
+			buffer<<(*(double *)args);
+			break;
+		case ARG_FLOAT:
+			buffer<<(*(float *)args);
+			break;
+		default:
+			return NULL;
+	}
+	return encryptStringWithSize(buffer.str());
+}
+
+//00010002
+string encryptArgsWithSize(int * argTypes, void **args ){ //with argTypes?
+	int count = getArgCount(argTypes);
+	stringstream buffer;
+	for(int i = 0; i< count; i++){
+		buffer<<encryptArgWithSize(argTypes[i],args[i]);
+	}
+
+	return buffer.str();
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Decryption Section
+
 int decryptInt(int fd){
 	char size[4] = {};
 	if(read(fd,size,4)< 0){
@@ -125,9 +192,59 @@ string decryptString(int fd){
 
 }
 
+//1st or last to be output?
+int * decryptArgType(int fd){
+	string s = decryptString(fd);
+	cout<<"Argtype"<<s<<endl;
+	//Parse the string back to fd
+	int * argType;
+	bzero(argType, s.length()+1);
+	for(int i = 0; i< s.length();i+=1){
+		if(s[i] >= '0' && s[i] <= '6') {
+			argType[i] =(int) (s[i]-'0');
+		}else{
+			return NULL;
+		}
+	}
+	argType[s.length()] = 0;
+	return argType;
+}
 
-int decryptString(int fd, char * s){
+void * decryptArg(int argType, int fd){
+	string encryptArg = decryptString(fd);
+	cout<<"Decrypt "<<encryptArg<<endl;
+	void  * arg = NULL;
+	if(argType == ARG_CHAR){
+		char ch = encryptArg[0];
+		arg = (void *)&ch;
+	}else if(argType == ARG_INT ){
+		int  i = atoi(encryptArg.c_str());
+		arg = (void *) &arg;
+	}else if(argType == ARG_SHORT){
+		short  i = atoi(encryptArg.c_str());
+		arg = (void *) &arg;
+	}else if(argType == ARG_LONG){
+		long  i = atol(encryptArg.c_str());
+		arg = (void *) &arg;
+	}else if(argType == ARG_DOUBLE){
+		double  i = atof(encryptArg.c_str());
+		arg = (void *) &arg;
+	}else if(argType == ARG_FLOAT){
+		float  i = atof(encryptArg.c_str());
+		arg = (void *) &arg;
+	}
+	return arg;
+}
 
-//	printf("%s",s);
-	return 0;
+
+void ** decryptArgsWithType(int * argType, int fd){
+
+	int count = getArgCount(argType);
+	cout<<"Arg count "<<count<<endl;
+	//WHye??
+	void ** args = (void **)malloc((count+1) * sizeof(void *));
+	for(int i = 0; i< count; i++){
+		args[i] = decryptArg(argType[i], fd);
+	}
+	return args;
 }
